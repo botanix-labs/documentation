@@ -574,6 +574,25 @@ Set up Grafana with preconfigured dashboards:
                 action        = "replace"
             }
         }
+
+        loki.source.docker "default" {
+            host       = "unix:///var/run/docker.sock"
+            targets    = discovery.relabel.docker.output
+            labels     = {env="mainnet", node="botanix-federation-member"}
+            forward_to = [loki.process.filter_logs.receiver]
+        }
+
+        loki.process "filter_logs" {
+            stage.docker {}
+            forward_to = [loki.write.default.receiver]
+        }
+
+        loki.write "default" {
+            endpoint {
+                url = "WILL_BE_COMMUNICATED"
+                tenant_id = "botanix-federation"
+            }
+        }
    ```
 
 ## Maintenance
