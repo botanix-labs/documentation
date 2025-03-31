@@ -589,7 +589,8 @@ Set up Grafana with preconfigured dashboards:
 
         loki.write "default" {
             endpoint {
-                url = "WILL_BE_COMMUNICATED"
+                url = "REPLACE_WITH_ACTUAL_URL"
+                # Replace the above placeholder with the actual URL provided by the Botanix Federation team.
                 tenant_id = "botanix-federation"
             }
         }
