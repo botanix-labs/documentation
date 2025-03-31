@@ -4,30 +4,6 @@ This document outlines the step-by-step process for federation members to prepar
 
 ## Timeline Overview
 
-```mermaid
-gantt
-    dateFormat  YYYY-MM-DD
-    title Federation Mainnet Launch Roadmap
-    
-    section Preparation
-    Kickoff Call                   :prep1, 2025-04-03,  7d
-    Security Audit??               :prep2, after prep1, 3d
-    
-    section Node Setup
-    Node Initialization            :setup1, after prep2,  0d
-    Key Generation                 :setup2, after setup1, 1d
-    Configuration Distribution     :setup3, after setup2, 3d
-    
-    section Federation Formation
-    Distributed Key Generation     :dkg1, after setup3, 1d
-    Integration Testing            :test1, after dkg2, 1d
-    
-    section Launch
-    Final Verification             :launch1, after test1, 2d
-    Genesis Block Creation         :launch2, after launch1, 1d
-    Block Production Begins        :milestone, after launch2, 0d
-```
-
 ## Detailed Steps
 
 ### 1. Federation Member Onboarding
@@ -74,10 +50,6 @@ gantt
 - [ ] Receive `genesis.json` and `config.toml` from federation coordinator
 - [ ] Verify file integrity using provided checksums
 
-```bash
-sha256sum -c checksums.txt
-```
-
 - [ ] Install configuration files to appropriate locations
 
 ```bash
@@ -103,11 +75,7 @@ cp config.toml /path/to/bitcoin-signer/config/
 - [ ] Verify key shares and federation membership
 - [ ] Store key shares securely in HSM or encrypted database **
 
-### 7. Integration Testing
-
-- [ ] Verify monitoring and alerting functionality
-
-### 9. Genesis and Block Production
+### 7. Genesis and Block Production
 
 - [ ] genesis block creation
 - [ ] Confirm block signing capability
@@ -115,6 +83,7 @@ cp config.toml /path/to/bitcoin-signer/config/
 - [ ] Verify transaction processing capability
 - [ ] Perform test transactions across components
 - [ ] Validate block production participation
+- [ ] Verify monitoring and alerting functionality
 
 ## Launch Checklist
 
