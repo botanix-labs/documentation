@@ -7,6 +7,7 @@ This guide provides comprehensive instructions for setting up and operating a Bo
 - [System Requirements](#system-requirements)
 - [Architecture Overview](#architecture-overview)
 - [Security Considerations](#security-considerations)
+- [Key Generation](#key-generation)
 - [Key Management](#key-management)
 - [Deployment Options](#deployment-options)
   - [Docker Compose Setup](#docker-compose-setup)
@@ -16,6 +17,7 @@ This guide provides comprehensive instructions for setting up and operating a Bo
   - [Bitcoin Signing Server](#bitcoin-signing-server-configuration)
   - [CometBFT Consensus Node](#cometbft-consensus-node-configuration)
   - [Grafana Alloy](#grafana-alloy-configuration)
+- [Block Fees](#block-fees)
 - [Maintenance](#maintenance)
 - [Troubleshooting](#troubleshooting)
 - [FAQ](#faq)
@@ -137,12 +139,30 @@ Each component has a specific role:
    dpkg-reconfigure -plow unattended-upgrades
    ```
 
+## Key Generation
+
+### Reth Keys
+
+```bash
+git clone https://github.com/botanix-labs/init-keys.git
+cd init-keys
+
+# generate the keys and store in ./output dir
+cargo run
+```
+
+### Cometbft Keys
+
+```bash
+cometbft init -k "secp256k1" --home /path/to/cometbft
+```
+
 ## Key Management
 
 ### Cold Storage for Validator Keys
 
 1. **Generate Keys Offline**
-    in view ??
+    in view **
 
 2. **Hardware Security Module (HSM) Integration**
    - YubiHSM 2 or Ledger devices recommended
@@ -251,6 +271,8 @@ services:
       - --abci-port=26658
       - --ipcdisable
       - --abci-host=0.0.0.0
+      - --cometbft-rpc-port=26657
+      - --cometbft-rpc-host=cometbft-consensus-node
     ports:
       - 8545:8545
       - 8546:8546
@@ -419,7 +441,7 @@ sudo mv btc-server /usr/local/bin/
 ##### CometBFT Consensus Node
 
 ```bash
-git clone https://github.com/cometbft/cometbft
+git clone https://github.com/cometbft/cometbft.git
 cd cometbft
 make install
 
@@ -595,6 +617,40 @@ Set up Grafana with preconfigured dashboards:
             }
         }
    ```
+
+### Allowed Ports (Recommended)
+
+#### Reth
+
+   | Port       | Functionality     | Exposure        |
+   |------------|-------------------|-----------------|
+   | 30303      | P2P communication | Public          |
+   | 8545       | RPC Port          | Internal        |
+   | 9001       | Metrics Port      | Public          |
+   | 26658      | Abci client port  | Internal        |
+   | 30304      | P2P communication | Public (unused) |
+   | 8456       | WS Port           | Internal        |
+   | 8551       | Engine API port   | Public (unused) |
+
+#### BTC Signing Server
+
+   | Port       | Functionality        | Exposure     |
+   |------------|----------------------|--------------|
+   | 8080       | Signing Service port | Internal     |
+   | 7000       | Metrics Port         | Public       |
+  
+#### Cometbft
+
+   | Port       | Functionality     | Exposure        |
+   |------------|-------------------|-----------------|
+   | 26656      | P2P communication | Public          |
+   | 26657      | RPC Port          | Internal        |
+   | 26660      | Metrics Port      | Public          |
+
+## Block Fees
+
+The evm address for the block fees should be generated from the cometbft validator secret key. see[https://github.com/botanix-labs/init-keys]
+This should be stored in the data_dir.
 
 ## Maintenance
 
