@@ -29,17 +29,9 @@ This document outlines the step-by-step process for federation members to prepar
 
 ### 4. Key Generation Phase
 
-- [ ] Generate node identity keys for Reth node
+- [ ] Generate node identity keys for Reth node [see](https://github.com/botanix-labs/init-keys)
 
-```bash
-    in-view
-```
-
-- [ ] Generate validator keys for CometBFT node
-
-```bash
-  cometbft init -k "secp256k1" --home /path/to/cometbft
-```
+- [ ] Generate validator keys for CometBFT node [see](https://github.com/botanix-labs/documentation/blob/main/federation.md)
 
 - [ ] Securely store generated key material with hardware backups
 - [ ] Configure HSM for storing sensitive key material
@@ -66,13 +58,12 @@ cp config.toml /path/to/bitcoin-signer/config/
 - [ ] Verify sync status of Bitcoind client
 - [ ] Participate in scheduled DKG
 - [ ] Verify threshold parameters (11/15 signature scheme)
-- [ ] Confirm HSM and key material availability **
+- [ ] Confirm HSM and key material availability ** (in-view)
 
 ```bash
   ## Node deployment to initialise dkg
 ```
 
-- [ ] Verify key shares and federation membership
 - [ ] Store key shares securely in HSM or encrypted database **
 
 ### 7. Genesis and Block Production

@@ -1,3 +1,3 @@
 # documentation
 
-Botanixlabs document hub (Internal &amp; External) 
+Botanixlabs document hub (Internal &amp; External)
