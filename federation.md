@@ -154,18 +154,57 @@ cargo run
 ### Cometbft Keys
 
 ```bash
+# Note: Cometbft keys should be initialised with the secp256k1 algorithm
 cometbft init -k "secp256k1" --home /path/to/cometbft
 ```
 
+#### Generate enode_id for p2p Communication
+
+```bash
+# This generates the enode_id needed for p2p communication
+cometbft show-node-id --home <PATH_TO_DIR>
+```
+
+The resulting enode_id is used in the format: `enode_id@node_ip_addr:node_p2p_port`
+Example: `957218cfa7ccea8585a752a77cb0acc478c5cc4b@34.635.278.90:26656`
+
 ## Key Management
 
-### Cold Storage for Validator Keys
+### Key Transmission Format
 
-1. **Generate Keys Offline**
-    in view **
+#### Reth
+
+- federation-public-key (obtained from init-keys)
+
+#### Cometbft
+
+```json
+{
+  "address": "",
+  "name": "",
+  "power": "10",
+  "pub_key": {
+    "type": "tendermint/PubKeySecp256k1",
+    "value": ""
+  }
+}
+
+enode_id: `enode_id@node_ip_addr:node_p2p_port`
+```
+
+Where:
+
+- `address`: the address value in the `priv_validator_key.json` file
+- `name`: the name of your node
+- `value`: the public key value in the `priv_validator_key.json` file
+
+### Storage for Validator Keys
+
+1. **Generate Keys**
+   - Generate Cometbft keys first and move them to the init-keys directory
 
 2. **Hardware Security Module (HSM) Integration**
-   - YubiHSM 2 or Ledger devices recommended
+   - TMKMS recommended for cometbft validators
 
 ## Deployment Options
 
@@ -471,8 +510,8 @@ reth poa \
     --authrpc.addr=127.0.0.1 \
     --authrpc.port=8551 \
     --btc-server=localhost:8080 \
-    --bitcoind.url=BITCOIND_HOST \
-    --bitcoind.username=BITCOIND_USER \
+    --bitcoind.url=${BITCOIND_HOST} \
+    --bitcoind.username=${BITCOIND_USER} \
     --bitcoind.password=${BITCOIND_PASS} \
     --frost.min_signers=11 \
     --frost.max_signers=15 \
@@ -620,37 +659,39 @@ Set up Grafana with preconfigured dashboards:
 
 ### Allowed Ports (Recommended)
 
-#### Reth
+#### Reth Node Ports
 
-   | Port       | Functionality     | Exposure        |
-   |------------|-------------------|-----------------|
-   | 30303      | P2P communication | Public          |
-   | 8545       | RPC Port          | Internal        |
-   | 9001       | Metrics Port      | Public          |
-   | 26658      | Abci client port  | Internal        |
-   | 30304      | P2P communication | Public (unused) |
-   | 8456       | WS Port           | Internal        |
-   | 8551       | Engine API port   | Public (unused) |
+| Port   | Protocol | Functionality      | Exposure        | Required | Additional Info                                           |
+|--------|----------|-------------------|-----------------|----------|----------------------------------------------------------|
+| 30303  | TCP/UDP  | P2P communication | Public          | Yes      | To enable connectivity to peers                           |
+| 8545   | TCP      | JSON-RPC API      | Internal        | Yes      | Recommend to use internally within organization           |
+| 9001   | TCP      | Metrics Port      | Public          | Optional | Allow for obtaining metrics for public dashboard          |
+| 26658  | TCP      | ABCI client port  | Internal        | Yes      | Internal to microservices                                 |
+| 30304  | TCP/UDP  | P2P communication | Public          | No       | Backup/alternate P2P port (unused)                        |
+| 8546   | TCP      | WebSocket Port    | Internal        | Optional | WebSocket connections for subscriptions                   |
+| 8551   | TCP      | Engine API port   | Internal        | No       | Not used in federation mode                               |
 
-#### BTC Signing Server
+#### Bitcoin Signing Server Ports
 
-   | Port       | Functionality        | Exposure     |
-   |------------|----------------------|--------------|
-   | 8080       | Signing Service port | Internal     |
-   | 7000       | Metrics Port         | Public       |
+| Port   | Protocol | Functionality        | Exposure     | Required | Additional Info                                 |
+|--------|----------|----------------------|--------------|----------|------------------------------------------------|
+| 8080   | TCP      | Signing Service API  | Internal     | Yes      | Must be accessible from Reth node               |
+| 7000   | TCP      | Metrics Port         | Public       | Optional | Expose metrics for monitoring dashboard         |
   
-#### Cometbft
+#### CometBFT Consensus Node Ports
 
-   | Port       | Functionality     | Exposure        |
-   |------------|-------------------|-----------------|
-   | 26656      | P2P communication | Public          |
-   | 26657      | RPC Port          | Internal        |
-   | 26660      | Metrics Port      | Public          |
+| Port   | Protocol | Functionality      | Exposure     | Required | Additional Info                                 |
+|--------|----------|-------------------|--------------|----------|------------------------------------------------|
+| 26656  | TCP      | P2P communication | Public       | Yes      | Required for validator communication            |
+| 26657  | TCP      | RPC API           | Internal     | Yes      | RPC interface for queries/transactions          |
+| 26660  | TCP      | Metrics Port      | Public       | Optional | Expose metrics for monitoring dashboard         |
+
+> **Note:** Public metrics endpoints should ideally be protected by authentication or restricted to specific IPs.
 
 ## Block Fees
 
 The evm address for the block fees should be generated from the cometbft validator secret key. see[https://github.com/botanix-labs/init-keys]
-This should be stored in the data_dir.
+This should be stored in the reth data_dir.
 
 ## Maintenance
 
@@ -674,18 +715,146 @@ This should be stored in the data_dir.
 
 ### Upgrade Procedures
 
-1. **Version Compatibility Matrix**
+#### Pre-Upgrade Checklist
 
-   | Component      |Compt Versions   |
-   |----------------|-----------------|
-   | Reth           | v1.0.0          |
-   | Bitcoin Signer | v1.0.0          |
-   | CometBFT       | v1.x            |
+1. **Review Release Notes**
+   - Review all changes in the upcoming release
+   - Note any breaking changes or new dependencies
+   - Check for configuration format changes
 
-2. **Rollback Plan**
-   - Maintain previous version containers/binaries
-   - Keep database snapshots before major upgrades
-   - Document the exact internal rollback procedure for each service
+2. **Backup Critical Data**
+   - Create snapshots of all databases before upgrading
+   - Backup all configuration files
+   - Ensure backups are verified and accessible
+
+3. **Version Compatibility Matrix**
+
+   | Component      | Current Version | Compatible Versions | Notes                          |
+   |----------------|-----------------|---------------------|--------------------------------|
+   | Reth           | v1.0.7          | ≥v1.0.x             | Minor versions are compatible  |
+   | Bitcoin Signer | v1.0.7          | ≥v1.0.x             | Must match Reth version        |
+   | CometBFT       | v1.0.0          | ≥v1.0.x             | Not compatible with v0.37+     |
+
+4. **Recommended Upgrade Path**
+
+```bash
+v1.0.0 → v1.0.3 → v1.0.7  # Do not skip multiple major versions
+```
+
+#### Upgrade Execution
+
+1. **Docker-based Upgrade**
+
+   ```bash
+   # Pull new images
+   docker pull us-central1-docker.pkg.dev/botanix-391913/botanix-testnet-node-v1/botanix-poa-node:latest
+   docker pull us-central1-docker.pkg.dev/botanix-391913/botanix-testnet-btc-server-v1/botanix-btc-server-v1:latest
+   ```
+
+2. **Binary-based Upgrade**
+
+   ```bash
+   # Download new binaries
+   wget https://storage.googleapis.com/botanix-artifact-registry/releases/reth/v1.0.7/reth-x86_64-unknown-linux-gnu.tar.gz
+   wget https://storage.googleapis.com/botanix-artifact-registry/releases/btc-server/v1.0.7/btc-server-x86_64-unknown-linux-gnu.tar.gz
+   
+   # Verify checksums
+   sha256sum -c reth-x86_64-unknown-linux-gnu.tar.gz.sha256sum
+   sha256sum -c btc-server-x86_64-unknown-linux-gnu.tar.gz.sha256sum
+   
+   # Stop running services
+   systemctl stop reth bitcoin-signing-server cometbft
+   
+   # Backup binaries
+   cp /usr/local/bin/reth /usr/local/bin/reth.bak
+   cp /usr/local/bin/btc-server /usr/local/bin/btc-server.bak
+   
+   # Extract and install new binaries
+   tar -xzf reth-x86_64-unknown-linux-gnu.tar.gz
+   tar -xzf btc-server-x86_64-unknown-linux-gnu.tar.gz
+   chmod +x reth btc-server
+   mv reth btc-server /usr/local/bin/
+   
+   # Restart services
+   systemctl start reth bitcoin-signing-server cometbft
+   ```
+
+3. **Configuration Updates**
+   - Review and apply any configuration changes required by the new version
+   - Update any environment variables or command line flags
+
+#### Post-Upgrade Verification
+
+1. **Verify Services**
+
+   ```bash
+   # Check service status
+   docker-compose ps  # For Docker setup
+   systemctl status reth bitcoin-signing-server cometbft  # For binary setup
+   
+   # Verify logs for errors
+   docker-compose logs -f  # For Docker setup
+   journalctl -u reth -u bitcoin-signing-server -u cometbft -f  # For binary setup
+   ```
+
+2. **Verify Connectivity**
+
+   ```bash
+   # Test RPC endpoints
+   curl -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' http://localhost:8545
+   ```
+
+3. **Monitor Performance**
+   - Check resource usage (CPU, memory, disk)
+   - Verify transaction processing
+   - Validate block production and consensus participation
+
+#### Rollback Procedure
+
+1. **Docker Rollback**
+
+   ```bash
+   # Stop services
+   docker-compose down
+   
+   # Update docker-compose.yml with previous image tags
+   # Then restart services
+   docker-compose up -d
+   ```
+
+2. **Binary Rollback**
+
+   ```bash
+   # Stop services
+   systemctl stop reth bitcoin-signing-server cometbft
+   
+   # Restore backup binaries
+   mv /usr/local/bin/reth.bak /usr/local/bin/reth
+   mv /usr/local/bin/btc-server.bak /usr/local/bin/btc-server
+   
+   # Restart services
+   systemctl start reth bitcoin-signing-server cometbft
+   ```
+
+3. **Database Rollback**
+
+   ```bash
+   # Stop services
+   docker-compose down  # For Docker setup
+   systemctl stop reth bitcoin-signing-server cometbft  # For binary setup
+   
+   # Restore database backups
+   rm -rf data/reth data/signing-server data/cometbft
+   tar xzf reth-backup-YYYY-MM-DD.tar.gz
+   tar xzf btc-signing-YYYY-MM-DD.tar.gz
+   tar xzf cometbft-backup-YYYY-MM-DD.tar.gz
+   
+   # Restart services
+   docker-compose up -d  # For Docker setup
+   systemctl start reth bitcoin-signing-server cometbft  # For binary setup
+   ```
+
+> **Important:** Always test upgrades in a staging environment before applying to production nodes.
 
 ## Troubleshooting
 
@@ -720,11 +889,62 @@ docker-compose logs -f --tail=100
 
 ## FAQ
 
+### General Questions
+
 **Q: How much disk space will the Reth node require over time?**
 A: A Full node will grow approximately 25-35GB per month. Plan for at least 2TB of storage for a full year of operation.
 
+**Q: What are the bandwidth requirements for running a Federation node?**
+A: You should provision at least 100 Mbps of bandwidth with unlimited data transfer.
+
+**Q: Can I run a Federation node on a virtual machine?**
+A: Yes, but dedicated bare metal is also an option for production validators. If using a VM, ensure dedicated CPU cores, guaranteed RAM, and low-latency SSD storage.
+
+**Q: How do I know if my node is properly connected to the network?**
+A: Check peer connections using: `curl -s http://localhost:26657/net_info | jq '.result.n_peers'`. You should have at least 10-13 peer connections.
+
+### Setup and Configuration
+
+**Q: How do I join a specific Botanix network (testnet vs mainnet)?**
+A: The network is determined by configuration files and startup parameters. Use the specific genesis file and persistent peer list provided by the Botanix team for the network you're joining.
+
+**Q: How do I configure my node to use an external Bitcoind instance?**
+A: Modify the following parameters in your configuration:
+
+```bash
+--bitcoind.url=http://your-bitcoind-host:8332
+--bitcoind.username=your-rpc-username
+--bitcoind.password=your-rpc-password
+```
+
+**Q: What does the "frost.min_signers" parameter control?**
+A: This parameter sets the minimum number of federation members required to sign a transaction.
+
+### Security and Key Management
+
 **Q: What is the recommended key rotation procedure?**
-A: For Cometbft keys, generate new keys offline, transfer to HSM, then update the validator configuration see[https://docs.cometbft.com/v0.37/core/validators].
+A: For CometBFT validator keys:
+
+1. Generate new keys offline using the secp256k1 curve
+2. Transfer to HSM if available
+3. Update your validator configuration
+
+See [CometBFT validators documentation](https://docs.cometbft.com/v0.37/core/validators) for detailed steps.
+
+### Monitoring and Maintenance
 
 **Q: What monitoring alerts should I set up?**
-A: At minimum: resource utilization (CPU, RAM, disk), dkg round status, peer list, and network connectivity.
+A: At minimum:
+
+- Resource utilization (CPU, RAM, disk)
+- Network connectivity and peer count
+- Block production and consensus participation
+- Disk space usage and growth rate
+- Service availability for all components
+- Failed transaction signing attempts
+
+**Q: How often should I perform database backups?**
+A: Daily incremental backups and weekly full backups are recommended. Critical configuration changes should trigger immediate backups.
+
+**Q: How do I restore my node from backups?**
+A: Follow the database rollback procedure in the upgrade section. Ensure you have all required components: database files, configuration files, and keys.
