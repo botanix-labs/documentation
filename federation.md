@@ -165,7 +165,7 @@ cometbft init -k "secp256k1" --home /path/to/cometbft
 cometbft show-node-id --home <PATH_TO_DIR>
 ```
 
-The resulting enode_id is used in the format: `enode_id@node_ip_addr:node_p2p_port`
+The resulting node_id is used in the format: `node_id@node_ip_addr:node_p2p_port`
 Example: `957218cfa7ccea8585a752a77cb0acc478c5cc4b@34.635.278.90:26656`
 
 ## Key Management
@@ -189,7 +189,7 @@ Example: `957218cfa7ccea8585a752a77cb0acc478c5cc4b@34.635.278.90:26656`
   }
 }
 
-enode_id: `enode_id@node_ip_addr:node_p2p_port`
+node_id: `node_id@node_ip_addr:node_p2p_port`
 ```
 
 Where:
@@ -251,10 +251,10 @@ services:
     env_file:
       - .bitcoin.env
     container_name: bitcoin-signing-server
-    image: us-central1-docker.pkg.dev/botanix-391913/botanix-testnet-btc-server-v1/botanix-btc-server-v1
+    image: us-central1-docker.pkg.dev/botanix-391913/botanix-mainnet-btc-server/botanix-btc-server
     hostname: bitcoin-signing-server
     command:
-      - --btc-network=mainnet
+      - --btc-network=bitcoin
       - --identifier=FROST_IDENTIFIER
       - --address=0.0.0.0:8080
       - --db=/bitcoin-server/data/db
@@ -282,7 +282,7 @@ services:
     env_file:
       - .bitcoin.env
     container_name: reth-poa-node
-    image:  us-central1-docker.pkg.dev/botanix-391913/botanix-testnet-node-v1/botanix-poa-node
+    image:  us-central1-docker.pkg.dev/botanix-391913/botanix-mainnet-node/botanix-reth
     command:
       - poa
       - --federation-config-path=/reth/botanix_testnet/config/chain.toml
@@ -304,7 +304,7 @@ services:
       - --frost.max_signers=15
       - --p2p-secret-key=/reth/botanix_testnet/config/discovery-secret
       - --port=30303
-      - --btc-network=mainnet
+      - --btc-network=bitcoin
       - --metrics=0.0.0.0:9001
       - --federation-mode
       - --abci-port=26658
@@ -312,6 +312,8 @@ services:
       - --abci-host=0.0.0.0
       - --cometbft-rpc-port=26657
       - --cometbft-rpc-host=cometbft-consensus-node
+      - --sync.enable_state_sync
+      - --sync.enable_historical_sync
     ports:
       - 8545:8545
       - 8546:8546
@@ -326,7 +328,6 @@ services:
     restart: unless-stopped
     networks:
       - federation_net
-
 
   cometbft-consensus-node:
     container_name: cometbft-consensus-node
@@ -351,10 +352,9 @@ services:
     environment:
       - ALLOW_DUPLICATE_IP=TRUE
       - LOG_LEVEL=DEBUG
-      - CHAIN_ID=3637
+      - CHAIN_ID=3737
     networks:
       - federation_net
-
 
   grafana-alloy:
     container_name: grafana-alloy
@@ -424,21 +424,20 @@ Monitor the logs:
 docker-compose logs -f CONTAINER_NAME
 ```
 
-### Binary Installation
+#### Binary Deployment Mode
 
-If Docker is not suitable for your environment, you can compile and run the components as native binaries.
-
-#### Building from Source
+If Docker is not suitable for your environment, you can run the components as native binaries.
+We have provided these binaries and their checksum below.
 
 ##### Reth Node
 
 ```bash
 
 # Download Reth Binary from gcloud bucket
-wget https://storage.googleapis.com/botanix-artifact-registry/releases/reth/v1.0.5/reth-x86_64-unknown-linux-gnu.tar.gz
+wget https://storage.googleapis.com/botanix-artifact-registry/releases/reth/v.1.0.7-main/reth-x86_64-unknown-linux-gnu.tar.gz
 
 # Download the binary checksum
-wget https://storage.googleapis.com/botanix-artifact-registry/releases/reth/v1.0.5/reth-x86_64-unknown-linux-gnu.tar.gz.sha256sum
+wget https://storage.googleapis.com/botanix-artifact-registry/releases/reth/v.1.0.7-main/reth-x86_64-unknown-linux-gnu.tar.gz.sha256sum
 
 # Verify binary checksum 
 sha256sum -c reth-x86_64-unknown-linux-gnu.tar.gz.sha256sum
@@ -458,10 +457,10 @@ sudo mv reth /usr/local/bin/
 
 ```bash
 # Download BTC Signing Server from gcloud bucket
-wget https://storage.googleapis.com/botanix-artifact-registry/releases/btc-server/v1.0.5/btc-server-x86_64-unknown-linux-gnu.tar.gz
+wget https://storage.googleapis.com/botanix-artifact-registry/releases/btc-server/v.1.0.7-main/btc-server-x86_64-unknown-linux-gnu.tar.gz
 
 # Download the binary checksum
-wget https://storage.googleapis.com/botanix-artifact-registry/releases/btc-server/v1.0.5/btc-server-x86_64-unknown-linux-gnu.tar.gz.sha256sum
+wget https://storage.googleapis.com/botanix-artifact-registry/releases/btc-server/v.1.0.7-main/btc-server-x86_64-unknown-linux-gnu.tar.gz.sha256sum
 
 # Verify binary checksum
 sha256sum -c btc-server-x86_64-unknown-linux-gnu.tar.gz.sha256sum
@@ -517,12 +516,16 @@ reth poa \
     --frost.max_signers=15 \
     --p2p-secret-key=/reth/botanix_testnet/discovery-secret \
     --port=30303 \
-    --btc-network=ma \
+    --btc-network=bitcoin \
     --metrics=0.0.0.0:9001 \
     --federation-mode \
     --abci-port=26658 \
     --ipcdisable \
-    --abci-host=0.0.0.0
+    --abci-host=0.0.0.0 \
+    --cometbft-rpc-port=26657 \
+    --cometbft-rpc-host=COMETBFT_HOST \
+    --sync.enable_state_sync \
+    --sync.enable_historical_sync
 ```
 
 ### Bitcoin Signing Server Configuration
@@ -546,6 +549,30 @@ draw-lookahead-period-count = 10
 http2-keepalive-interval = 60
 http2-keepalive-timeout = 20
 ```
+
+#### Bitcoin Signing Server CLI Configuration
+
+When running the btc-server binary directly, use the following command-line arguments:
+
+```bash
+btc-server \
+  --btc-network=bitcoin \
+  --identifier=FROST_IDENTIFIER \
+  --address=0.0.0.0:8080 \
+  --db=/path/to/data/db \
+  --min-signers=11 \
+  --max-signers=15 \
+  --toml=/path/to/config/config.toml \
+  --fee-rate-diff-percentage=30 \
+  --bitcoind-url=YOUR_BITCOIND_HOST \
+  --bitcoind-user=YOUR_BITCOIND_USER \
+  --bitcoind-pass=YOUR_BITCOIND_PASS \
+  --btc-signing-server-jwt-secret=/path/to/config/jwt.hex \
+  --fall-back-fee-rate-sat-per-vbyte=5 \
+  --metrics-port=7000
+```
+
+Replace `/path/to/` with your actual installation paths, and we would supply the appropriate values for `FROST_IDENTIFIER`.
 
 ### CometBFT Consensus Node Configuration
 
@@ -575,7 +602,7 @@ Key files to configure in `config/cometbft/config.toml`:
    ```json
         {
             "app_hash": "",
-            "chain_id": "3637",
+            "chain_id": "3737",
             "consensus_params": {
                 "block": {
                     "max_bytes": "4194304",
@@ -620,39 +647,118 @@ Set up Grafana with preconfigured dashboards:
             host = "unix:///var/run/docker.sock"
         }
 
+        # Read hostname from file for machine identification
+        local.file "hostname" {
+            path = "/etc/hostname"
+        }
+
         discovery.relabel "docker" {
             targets = discovery.docker.linux.targets
 
+            # Add machine hostname to all metrics
+            rule {
+                replacement   = local.file.hostname.content
+                target_label  = "machine_name"
+            }
+
+            # Extract and label specific services with proper names
             rule {
                 source_labels = ["__meta_docker_container_name"]
-                target_label  = "service_name"
-                action        = "replace"
+                regex         = "bitcoin-signing-server"
+                replacement   = "btc-server"
+                target_label  = "service"
             }
 
             rule {
                 source_labels = ["__meta_docker_container_name"]
+                regex         = "reth-poa-node"
+                replacement   = "reth-node"
+                target_label  = "service"
+            }
+
+            rule {
+                source_labels = ["__meta_docker_container_name"]
+                regex         = "cometbft-consensus-node"
+                replacement   = "consensus-node"
+                target_label  = "service"
+            }
+
+            # Federation label for all components
+            rule {
+                replacement   = "botanix-federation"
                 target_label  = "federation"
-                action        = "replace"
             }
         }
 
+        # Configure log collection for the three main services
         loki.source.docker "default" {
             host       = "unix:///var/run/docker.sock"
             targets    = discovery.relabel.docker.output
-            labels     = {env="mainnet", node="botanix-federation-member"}
+            labels     = {
+                env = "mainnet", 
+                node_type = "federation-member", 
+                machine = local.file.hostname.content
+            }
             forward_to = [loki.process.filter_logs.receiver]
         }
 
         loki.process "filter_logs" {
             stage.docker {}
+            
+            # Extract log levels for better filtering
+            stage.regex {
+                expression = "(?i)\\b(error|warn|info|debug)\\b"
+                source     = "message"
+                labels     = ["level"]
+            }
+            
             forward_to = [loki.write.default.receiver]
         }
 
         loki.write "default" {
             endpoint {
                 url = "REPLACE_WITH_ACTUAL_URL"
-                # Replace the above placeholder with the actual URL provided by the Botanix Federation team.
+                # Authentication options - choose one:
+                
+                # Option 1: Basic Auth
+                basic_auth {
+                    username = "REPLACE_WITH_USERNAME"
+                    password = "REPLACE_WITH_PASSWORD"
+                }
+                
+                # Option 2: Bearer Token (commented out - uncomment to use)
+                # bearer_token = "REPLACE_WITH_TOKEN"
+                
                 tenant_id = "botanix-federation"
+            }
+        }
+
+        # Configure metrics scraping for the three main services
+        prometheus.scrape "federation_metrics" {
+            targets = discovery.relabel.docker.output
+            forward_to = [prometheus.remote_write.default.receiver]
+            job_name = "botanix_federation_node"
+        }
+
+        prometheus.remote_write "default" {
+            endpoint {
+                url = "REPLACE_WITH_METRICS_URL"
+                
+                # Authentication options - choose one:
+                
+                # Option 1: Basic Auth
+                basic_auth {
+                    username = "REPLACE_WITH_USERNAME"
+                    password = "REPLACE_WITH_PASSWORD"
+                }
+                
+                # Option 2: Bearer Token (commented out - uncomment to use)
+                # bearer_token = "REPLACE_WITH_TOKEN"
+                
+                # Option 3: Authorization Header (commented out - uncomment to use)
+                # headers = {
+                #     "Authorization" = "REPLACE_WITH_AUTH_HEADER"
+                # }
             }
         }
    ```
@@ -731,8 +837,8 @@ This should be stored in the reth data_dir.
 
    | Component      | Current Version | Compatible Versions | Notes                          |
    |----------------|-----------------|---------------------|--------------------------------|
-   | Reth           | v1.0.7          | ≥v1.0.x             | Minor versions are compatible  |
-   | Bitcoin Signer | v1.0.7          | ≥v1.0.x             | Must match Reth version        |
+   | Reth           | v1.0.7-main     | ≥v1.0.x             | Minor versions are compatible  |
+   | Bitcoin Signer | v1.0.7-main     | ≥v1.0.x             | Must match Reth version        |
    | CometBFT       | v1.0.0          | ≥v1.0.x             | Not compatible with v0.37+     |
 
 4. **Recommended Upgrade Path**
@@ -747,16 +853,16 @@ v1.0.0 → v1.0.3 → v1.0.7  # Do not skip multiple major versions
 
    ```bash
    # Pull new images
-   docker pull us-central1-docker.pkg.dev/botanix-391913/botanix-testnet-node-v1/botanix-poa-node:latest
-   docker pull us-central1-docker.pkg.dev/botanix-391913/botanix-testnet-btc-server-v1/botanix-btc-server-v1:latest
+   docker pull us-central1-docker.pkg.dev/botanix-391913/botanix-mainnet-node/botanix-reth:latest
+   docker pull us-central1-docker.pkg.dev/botanix-391913/botanix-mainnet-btc-server/botanix-btc-server:latest
    ```
 
 2. **Binary-based Upgrade**
 
    ```bash
    # Download new binaries
-   wget https://storage.googleapis.com/botanix-artifact-registry/releases/reth/v1.0.7/reth-x86_64-unknown-linux-gnu.tar.gz
-   wget https://storage.googleapis.com/botanix-artifact-registry/releases/btc-server/v1.0.7/btc-server-x86_64-unknown-linux-gnu.tar.gz
+   wget https://storage.googleapis.com/botanix-artifact-registry/releases/reth/v.1.0.7-main/reth-x86_64-unknown-linux-gnu.tar.gz
+   wget https://storage.googleapis.com/botanix-artifact-registry/releases/btc-server/v.1.0.7-main/btc-server-x86_64-unknown-linux-gnu.tar.gz
    
    # Verify checksums
    sha256sum -c reth-x86_64-unknown-linux-gnu.tar.gz.sha256sum
