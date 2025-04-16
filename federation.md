@@ -853,8 +853,8 @@ v1.0.0 → v1.0.3 → v1.0.7  # Do not skip multiple major versions
 
    ```bash
    # Pull new images
-   docker pull us-central1-docker.pkg.dev/botanix-391913/botanix-testnet-node-v1/botanix-poa-node:latest
-   docker pull us-central1-docker.pkg.dev/botanix-391913/botanix-testnet-btc-server-v1/botanix-btc-server-v1:latest
+   docker pull us-central1-docker.pkg.dev/botanix-391913/botanix-mainnet-node/botanix-reth:latest
+   docker pull us-central1-docker.pkg.dev/botanix-391913/botanix-mainnet-btc-server/botanix-btc-server:latest
    ```
 
 2. **Binary-based Upgrade**
