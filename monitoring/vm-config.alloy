@@ -1,0 +1,99 @@
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+local.file "hostname" {
+  filename = "/etc/hostname"
+}
+
+prometheus.scrape "integrations_node_exporter" {
+
+  targets    = [
+    {"__address__" = "localhost:9001", "component" = "reth-poa-node"},
+    {"__address__" = "localhost:7000", "component" = "bitcoin-signing-server"},
+    {"__address__" = "localhost:26660", "component" = "consensus-node"},
+  ]
+  forward_to      = [prometheus.remote_write.default.receiver]
+  job_name        = "OPERATOR_NAME-botanix-federation"
+
+  scrape_interval = "15s"
+  scrape_timeout  = "10s"
+}
+
+prometheus.remote_write "default" {
+  endpoint {
+    url          = "REPLACE_URL"
+    bearer_token = "REPLACE_BEARER_TOKEN"
+
+    headers = {
+      "X-Scope-OrgID"           = "botanix-federation",
+      "X-Custom-Header"         = "federation-node-OPERATOR_NAME",
+      "CF-Access-Client-Id"     = "REPLACE_WITH_CLIENT_ID",
+      "CF-Access-Client-Secret" = "REPLACE_WITH_CLIENT_SECRET",
+    }
+    
+    tls_config {
+      insecure_skip_verify = false
+    }
+  }
+  
+  external_labels = {
+    federation    = "botanix-federation",
+    federation_id = "OPERATOR_NAME",
+  }
+}
+
+local.file_match "botanix_mainnet" {
+  path_targets = [{
+    __address__ = "localhost",
+    __path__    = "PATH_TO_RETH_LOG_FILES",
+    instance    = "OPERATOR_NAME",
+    job         = "OPERATOR_NAME/reth-node",
+  },
+  {
+    __address__ = "localhost",
+    __path__    = "PATH_TO_SIGNING_SERVER_LOG_FILES",
+    instance    = "OPERATOR_NAME",
+    job         = "OPERATOR_NAME/bitcoin-signing-server",
+  },
+  {
+    __address__ = "localhost",
+    __path__    = "PATH_TO_COMETBFT_LOG_FILES",
+    instance    = "OPERATOR_NAME",
+    job         = "OPERATOR_NAME/cometbft-consensus-nodes",
+  }]
+}
+
+loki.source.file "botanix_scrape" {
+    targets       = local.file_match.botanix_mainnet.targets
+    forward_to    = [loki.write.botanix_write.receiver]
+    tail_from_end = true
+}
+
+loki.write "botanix_write" {
+    endpoint {
+        url       = "REPLACE_URL"
+        tenant_id = "REPLACE_TENANT_ID"
+
+        bearer_token = "REPLACE_BEARER_TOKEN"
+        
+        http_headers = {
+            "X-Scope-OrgID"           = ["botanix-federation"],
+            "X-Custom-Header"         = ["federation-node-OPERATOR_NAME"],
+            "CF-Access-Client-Id"     = ["REPLACE_WITH_CLIENT_ID"],
+            "CF-Access-Client-Secret" = ["REPLACE_WITH_CLIENT_SECRET"],
+        }
+        
+        tls_config {
+            insecure_skip_verify = false
+        }
+    }
+  
+    external_labels = {
+        federation    = "botanix-federation",
+        federation_id = "OPERATOR_NAME",
+        env           = "mainnet",
+        node_type     = "federation-member",
+    }
+}
