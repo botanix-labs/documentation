@@ -1,0 +1,143 @@
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+// Node Identity
+local.file "hostname" {
+  filename = "/etc/hostname"
+}
+
+// Docker Discovery
+discovery.docker "linux" {
+  host = "unix:///var/run/docker.sock"
+}
+
+// Relabeling Rules
+discovery.relabel "docker" {
+  targets = discovery.docker.linux.targets
+  
+  rule {
+    replacement   = local.file.hostname.content
+    target_label  = "machine_name"
+  }
+  
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    target_label  = "network"
+    action        = "replace"
+    replacement   = "botanix-mainnet"
+  }
+  
+  rule {
+    replacement   = "botanix-federation"
+    target_label  = "federation"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = ".*(signing|btc|reth|poa|consensus|cometbft).*"
+    action        = "keep"
+  }
+  
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    target_label  = "OPERATOR_NAME"
+    action        = "keep"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    target_label  = "service_name"
+    action        = "replace"
+  }
+}
+
+
+loki.source.docker "default" {
+  host    = "unix:///var/run/docker.sock"
+  targets = discovery.relabel.docker.output
+  
+  labels = {
+    env           = "mainnet",
+    node_type     = "federation-member",
+    instance      = local.file.hostname.content,
+    federation    = "botanix-federation",
+    federation_id = "OPERATOR_NAME",
+  }
+  
+  forward_to = [loki.process.filter_logs.receiver]
+}
+
+loki.process "filter_logs" {
+  stage.docker {}
+  
+  stage.regex {
+    expression = "(?i)\\b(error|warn|info|debug)\\b"
+  }
+  
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url       = "REPLACE_URL"
+    tenant_id = "REPLACE_TENANT_ID"
+
+    bearer_token = "REPLACE_BEARER_TOKEN"
+    
+    http_headers = {
+      "X-Scope-OrgID"           = ["botanix-federation"],
+      "X-Custom-Header"         = ["federation-node-OPERATOR_NAME"],
+      "CF-Access-Client-Id"     = ["REPLACE_WITH_CLIENT_ID"],
+      "CF-Access-Client-Secret" = ["REPLACE_WITH_CLIENT_SECRET"],
+    }
+    
+    tls_config {
+      insecure_skip_verify = false
+    }
+  }
+  
+  external_labels = {
+    federation    = "botanix-federation",
+    federation_id = "OPERATOR_NAME",
+  }
+}
+
+
+prometheus.scrape "mainnet" {
+  targets = [
+    {"__address__" = "reth-poa-node:9001", "component" = "reth-poa-node"},
+    {"__address__" = "bitcoin-signing-server:7000", "component" = "bitcoin-signing-server"},
+    {"__address__" = "cometbft-consensus-node:26660", "component" = "consensus-node"},
+  ]
+  
+  job_name        = "OPERATOR_NAME-botanix-federation"
+  scrape_interval = "15s"
+  scrape_timeout  = "10s"
+  
+  forward_to      = [prometheus.remote_write.default.receiver]
+}
+
+prometheus.remote_write "default" {
+  endpoint {
+    url          = "REPLACE_URL"
+    bearer_token = "REPLACE_BEARER_TOKEN"
+
+    headers = {
+      "X-Scope-OrgID"           = "botanix-federation",
+      "X-Custom-Header"         = "federation-node-OPERATOR_NAME",
+      "CF-Access-Client-Id"     = "REPLACE_WITH_CLIENT_ID",
+      "CF-Access-Client-Secret" = "REPLACE_WITH_CLIENT_SECRET",
+    }
+    
+    tls_config {
+      insecure_skip_verify = false
+    }
+  }
+  
+  external_labels = {
+    federation    = "botanix-federation",
+    federation_id = "OPERATOR_NAME",
+  }
+}

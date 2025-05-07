@@ -2,6 +2,8 @@
 
 This guide provides comprehensive instructions for setting up and operating a Botanix Federation node with all required microservices. The setup includes Reth Ethereum node, Bitcoin signing server, CometBFT consensus node, and Grafana Alloy monitoring.
 
+> **Update (May 2025)**: This guide has been updated to include the CLI arguments for all services and the latest configuration options for mainnet.
+
 ## Table of Contents
 
 - [System Requirements](#system-requirements)
@@ -11,12 +13,17 @@ This guide provides comprehensive instructions for setting up and operating a Bo
 - [Key Management](#key-management)
 - [Deployment Options](#deployment-options)
   - [Docker Compose Setup](#docker-compose-setup)
-  - [Binary Installation](#binary-installation)
+  - [Binary Deployment Mode](#binary-deployment-mode)
 - [Configuration](#configuration)
-  - [Reth Node](#reth-node-configuration)
-  - [Bitcoin Signing Server](#bitcoin-signing-server-configuration)
-  - [CometBFT Consensus Node](#cometbft-consensus-node-configuration)
-  - [Grafana Alloy](#grafana-alloy-configuration)
+  - [Reth Node Configuration](#reth-node-configuration)
+  - [Bitcoin Signing Server Configuration](#bitcoin-signing-server-configuration)
+  - [CometBFT Consensus Node Configuration](#cometbft-consensus-node-configuration)
+  - [Grafana Alloy Configuration](#grafana-alloy-configuration)
+- [CLI Arguments](#cli-arguments)
+  - [Reth Node CLI Arguments](#reth-node-cli-arguments)
+  - [Bitcoin Signing Server CLI Arguments](#bitcoin-signing-server-cli-arguments)
+  - [CometBFT CLI Arguments](#cometbft-cli-arguments)
+  - [Grafana Alloy CLI Arguments](#grafana-alloy-cli-arguments)
 - [Block Fees](#block-fees)
 - [Maintenance](#maintenance)
 - [Troubleshooting](#troubleshooting)
@@ -226,7 +233,7 @@ Create the following directory structure:
 ```text
 Botanix-Fed/
 ├── docker-compose.yml
-├── .env
+├── .bitcoin.env
 ├── config/
 │   ├── reth/
 │   ├── signing-server/
@@ -238,6 +245,26 @@ Botanix-Fed/
     ├── cometbft/
     └── grafana-alloy/
 ```
+
+#### Env File
+
+Create a `.bitcoin.env` file with the following variables:
+
+```bash
+# Bitcoin node connection details
+BITCOIND_HOST=http://your-bitcoind-host:8332
+BITCOIND_USER=your-rpc-username
+BITCOIND_PASS=your-rpc-password
+
+# Block fee recipient (generated from cometbft validator key)
+BLOCK_FEE_RECIPIENT_ADDRESS=0x1234567890abcdef1234567890abcdef12345678
+
+# Optional environment variables
+# P2P_LADDR=tcp://0.0.0.0:26656
+# RPC_LADDR=tcp://0.0.0.0:26657
+```
+
+The `.bitcoin.env` file contains sensitive configuration variables that are loaded by the Docker containers. These variables should be kept secure and not committed to version control.
 
 #### Docker Compose File
 
@@ -258,8 +285,8 @@ services:
       - --identifier=FROST_IDENTIFIER
       - --address=0.0.0.0:8080
       - --db=/bitcoin-server/data/db
-      - --min-signers=11
-      - --max-signers=15
+      - --min-signers=12
+      - --max-signers=16
       - --toml=/bitcoin-server/config/config.toml
       - --fee-rate-diff-percentage=30
       - --bitcoind-url=${BITCOIND_HOST}
@@ -268,6 +295,9 @@ services:
       - --btc-signing-server-jwt-secret=/bitcoin-server/config/jwt.hex
       - --fall-back-fee-rate-sat-per-vbyte=5
       - --metrics-port=7000
+      - --federation-config-path=/bitcoin-server/config/chain.toml
+      - --p2p-secret-key=/bitcoin-server/config/discovery-secret
+      - --coordinator=0
     ports:
       - 8080:8080
       - 7000:7000
@@ -292,6 +322,8 @@ services:
       - --http.port=8545
       - --http.api=debug,eth,net,trace,txpool,web3,rpc
       - --http.corsdomain=*
+      - --ws
+      - --ws.port=8546
       - -vvv
       - --btc-signing-server-jwt-secret=/reth/botanix_testnet/config/jwt.hex
       - --authrpc.addr=127.0.0.1
@@ -300,8 +332,8 @@ services:
       - --bitcoind.url=${BITCOIND_HOST}
       - --bitcoind.username=${BITCOIND_USER}
       - --bitcoind.password=${BITCOIND_PASS}
-      - --frost.min_signers=11
-      - --frost.max_signers=15
+      - --frost.min_signers=12
+      - --frost.max_signers=16
       - --p2p-secret-key=/reth/botanix_testnet/config/discovery-secret
       - --port=30303
       - --btc-network=bitcoin
@@ -314,6 +346,7 @@ services:
       - --cometbft-rpc-host=cometbft-consensus-node
       - --sync.enable_state_sync
       - --sync.enable_historical_sync
+      - --block-fee-recipient-address=${BLOCK_FEE_RECIPIENT_ADDRESS}
     ports:
       - 8545:8545
       - 8546:8546
@@ -352,7 +385,7 @@ services:
     environment:
       - ALLOW_DUPLICATE_IP=TRUE
       - LOG_LEVEL=DEBUG
-      - CHAIN_ID=3737
+      - CHAIN_ID=3637
     networks:
       - federation_net
 
@@ -372,36 +405,6 @@ services:
       - ./data/alloy:/var/lib/alloy/data
       - ./config/alloy:/etc/alloy/  
     restart: on-failure
-    networks:
-      - federation_net
-
-
-  nginx-proxy:
-    container_name: nginx-proxy
-    image: nginx:latest
-    ports:
-      - 80:80
-      - 443:443
-    volumes:
-      - ./config/proxy:/etc/nginx/conf.d/nginx.conf
-    restart: unless-stopped
-    networks:
-      - federation_net
-
-
-  cadvisor:
-    container_name: cadvisor
-    image: gcr.io/cadvisor/cadvisor:v0.47.0
-    ports:
-      - 8000:8080
-    volumes:
-      - /:/rootfs:ro
-      - /var/run:/var/run:ro
-      - /sys:/sys:ro
-      - /var/lib/docker/:/var/lib/docker:ro
-      - /dev/disk/:/dev/disk:ro
-    restart: unless-stopped
-    privileged: true
     networks:
       - federation_net
 
@@ -434,10 +437,10 @@ We have provided these binaries and their checksum below.
 ```bash
 
 # Download Reth Binary from gcloud bucket
-wget https://storage.googleapis.com/botanix-artifact-registry/releases/reth/v.1.0.7-main/reth-x86_64-unknown-linux-gnu.tar.gz
+wget https://storage.googleapis.com/botanix-artifact-registry/releases/reth/v.1.0.10/reth-x86_64-unknown-linux-gnu.tar.gz
 
 # Download the binary checksum
-wget https://storage.googleapis.com/botanix-artifact-registry/releases/reth/v.1.0.7-main/reth-x86_64-unknown-linux-gnu.tar.gz.sha256sum
+wget https://storage.googleapis.com/botanix-artifact-registry/releases/reth/v.1.0.10/reth-x86_64-unknown-linux-gnu.tar.gz.sha256sum
 
 # Verify binary checksum 
 sha256sum -c reth-x86_64-unknown-linux-gnu.tar.gz.sha256sum
@@ -457,10 +460,10 @@ sudo mv reth /usr/local/bin/
 
 ```bash
 # Download BTC Signing Server from gcloud bucket
-wget https://storage.googleapis.com/botanix-artifact-registry/releases/btc-server/v.1.0.7-main/btc-server-x86_64-unknown-linux-gnu.tar.gz
+wget https://storage.googleapis.com/botanix-artifact-registry/releases/btc-server/v.1.0.10/btc-server-x86_64-unknown-linux-gnu.tar.gz
 
 # Download the binary checksum
-wget https://storage.googleapis.com/botanix-artifact-registry/releases/btc-server/v.1.0.7-main/btc-server-x86_64-unknown-linux-gnu.tar.gz.sha256sum
+wget https://storage.googleapis.com/botanix-artifact-registry/releases/btc-server/v.1.0.10/btc-server-x86_64-unknown-linux-gnu.tar.gz.sha256sum
 
 # Verify binary checksum
 sha256sum -c btc-server-x86_64-unknown-linux-gnu.tar.gz.sha256sum
@@ -504,6 +507,10 @@ reth poa \
     --http.port=8545 \
     --http.api=debug,eth,net,trace,txpool,web3,rpc \
     --http.corsdomain=* \
+    --ws \
+    --ws.addr=0.0.0.0 \
+    --ws.port=8546 \
+    --ws.api=debug,eth,net,trace,txpool,web3,rpc \ 
     -vvv \
     --btc-signing-server-jwt-secret=/reth/botanix_testnet/jwt.hex \
     --authrpc.addr=127.0.0.1 \
@@ -512,8 +519,8 @@ reth poa \
     --bitcoind.url=${BITCOIND_HOST} \
     --bitcoind.username=${BITCOIND_USER} \
     --bitcoind.password=${BITCOIND_PASS} \
-    --frost.min_signers=11 \
-    --frost.max_signers=15 \
+    --frost.min_signers=12 \
+    --frost.max_signers=16 \
     --p2p-secret-key=/reth/botanix_testnet/discovery-secret \
     --port=30303 \
     --btc-network=bitcoin \
@@ -525,7 +532,8 @@ reth poa \
     --cometbft-rpc-port=26657 \
     --cometbft-rpc-host=COMETBFT_HOST \
     --sync.enable_state_sync \
-    --sync.enable_historical_sync
+    --sync.enable_historical_sync \
+    --block-fee-recipient-address=${BLOCK_FEE_RECIPIENT_ADDRESS}
 ```
 
 ### Bitcoin Signing Server Configuration
@@ -560,8 +568,8 @@ btc-server \
   --identifier=FROST_IDENTIFIER \
   --address=0.0.0.0:8080 \
   --db=/path/to/data/db \
-  --min-signers=11 \
-  --max-signers=15 \
+  --min-signers=12 \
+  --max-signers=16 \
   --toml=/path/to/config/config.toml \
   --fee-rate-diff-percentage=30 \
   --bitcoind-url=YOUR_BITCOIND_HOST \
@@ -569,7 +577,10 @@ btc-server \
   --bitcoind-pass=YOUR_BITCOIND_PASS \
   --btc-signing-server-jwt-secret=/path/to/config/jwt.hex \
   --fall-back-fee-rate-sat-per-vbyte=5 \
-  --metrics-port=7000
+  --metrics-port=7000 \ 
+  --federation-config-path=/bitcoin-server/config/chain.toml \ 
+  --p2p-secret-key=/bitcoin-server/config/discovery-secret \
+  --coordinator=0
 ```
 
 Replace `/path/to/` with your actual installation paths, and we would supply the appropriate values for `FROST_IDENTIFIER`.
@@ -594,6 +605,10 @@ Key files to configure in `config/cometbft/config.toml`:
    timeout_prevote = "1s"
    timeout_precommit = "1s"
    timeout_commit = "5s"
+
+   [mempool]
+    type = "nop"
+    wal_dir = ""
    ```
 
 2. **genesis.json**:
@@ -602,7 +617,7 @@ Key files to configure in `config/cometbft/config.toml`:
    ```json
         {
             "app_hash": "",
-            "chain_id": "3737",
+            "chain_id": "3637",
             "consensus_params": {
                 "block": {
                     "max_bytes": "4194304",
@@ -638,130 +653,138 @@ Key files to configure in `config/cometbft/config.toml`:
 
 ### Grafana Alloy Configuration
 
-Set up Grafana with preconfigured dashboards:
+Set up Grafana alloy with preconfigured config using the provided configuration templates. Choose the appropriate template based on your deployment method:
 
-**Alloy Provider Config** (`config/grafana-alloy/config.alloy`):
+#### Docker Deployment Configuration
 
-   ```alloy
-        discovery.docker "linux" {
-            host = "unix:///var/run/docker.sock"
-        }
+For Docker deployments, use the `docker-config.alloy` template provided in the monitoring directory:
 
-        # Read hostname from file for machine identification
-        local.file "hostname" {
-            path = "/etc/hostname"
-        }
+```bash
+# Copy the template to your config directory
+cp /monitoring/docker-config.alloy ./config/alloy/config.alloy
+```
 
-        discovery.relabel "docker" {
-            targets = discovery.docker.linux.targets
+The Docker configuration automatically discovers and monitors all federation services running in Docker containers.
 
-            # Add machine hostname to all metrics
-            rule {
-                replacement   = local.file.hostname.content
-                target_label  = "machine_name"
-            }
+#### VM/Binary Deployment Configuration
 
-            # Extract and label specific services with proper names
-            rule {
-                source_labels = ["__meta_docker_container_name"]
-                regex         = "bitcoin-signing-server"
-                replacement   = "btc-server"
-                target_label  = "service"
-            }
+For VM or binary deployments, use the `vm-config.alloy` template provided in the monitoring directory:
 
-            rule {
-                source_labels = ["__meta_docker_container_name"]
-                regex         = "reth-poa-node"
-                replacement   = "reth-node"
-                target_label  = "service"
-            }
+```bash
+# Copy the template to your config directory
+cp /monitoring/vm-config.alloy /etc/alloy/config.alloy
+```
 
-            rule {
-                source_labels = ["__meta_docker_container_name"]
-                regex         = "cometbft-consensus-node"
-                replacement   = "consensus-node"
-                target_label  = "service"
-            }
+The VM configuration requires specifying the paths to log files manually.
 
-            # Federation label for all components
-            rule {
-                replacement   = "botanix-federation"
-                target_label  = "federation"
-            }
-        }
+#### Required Replacements
 
-        # Configure log collection for the three main services
-        loki.source.docker "default" {
-            host       = "unix:///var/run/docker.sock"
-            targets    = discovery.relabel.docker.output
-            labels     = {
-                env = "mainnet", 
-                node_type = "federation-member", 
-                machine = local.file.hostname.content
-            }
-            forward_to = [loki.process.filter_logs.receiver]
-        }
+The following placeholder values in the configuration files need to be replaced with values provided by the federation coordinator:
 
-        loki.process "filter_logs" {
-            stage.docker {}
-            
-            # Extract log levels for better filtering
-            stage.regex {
-                expression = "(?i)\\b(error|warn|info|debug)\\b"
-                source     = "message"
-                labels     = ["level"]
-            }
-            
-            forward_to = [loki.write.default.receiver]
-        }
+| Placeholder | Description |
+|-------------|-------------|
+| `OPERATOR_NAME` | Your node/operator name in the federation |
+| `REPLACE_URL` | URL endpoint for remote metrics/logs collection |
+| `REPLACE_TENANT_ID` | Tenant ID for Loki log collection |
+| `REPLACE_BEARER_TOKEN` | Authentication token for remote write |
+| `REPLACE_WITH_CLIENT_ID` | Cloudflare Access Client ID |
+| `REPLACE_WITH_CLIENT_SECRET` | Cloudflare Access Client Secret |
+| `PATH_TO_RETH_LOG_FILES` | Path to Reth log files (VM config only) |
+| `PATH_TO_SIGNING_SERVER_LOG_FILES` | Path to BTC signing server log files (VM config only) |
+| `PATH_TO_COMETBFT_LOG_FILES` | Path to CometBFT log files (VM config only) |
 
-        loki.write "default" {
-            endpoint {
-                url = "REPLACE_WITH_ACTUAL_URL"
-                # Authentication options - choose one:
-                
-                # Option 1: Basic Auth
-                basic_auth {
-                    username = "REPLACE_WITH_USERNAME"
-                    password = "REPLACE_WITH_PASSWORD"
-                }
-                
-                # Option 2: Bearer Token (commented out - uncomment to use)
-                # bearer_token = "REPLACE_WITH_TOKEN"
-                
-                tenant_id = "botanix-federation"
-            }
-        }
+## CLI Arguments
 
-        # Configure metrics scraping for the three main services
-        prometheus.scrape "federation_metrics" {
-            targets = discovery.relabel.docker.output
-            forward_to = [prometheus.remote_write.default.receiver]
-            job_name = "botanix_federation_node"
-        }
+This section documents all available command-line arguments for each service, providing detailed descriptions and usage examples.
 
-        prometheus.remote_write "default" {
-            endpoint {
-                url = "REPLACE_WITH_METRICS_URL"
-                
-                # Authentication options - choose one:
-                
-                # Option 1: Basic Auth
-                basic_auth {
-                    username = "REPLACE_WITH_USERNAME"
-                    password = "REPLACE_WITH_PASSWORD"
-                }
-                
-                # Option 2: Bearer Token (commented out - uncomment to use)
-                # bearer_token = "REPLACE_WITH_TOKEN"
-                
-                # Option 3: Authorization Header (commented out - uncomment to use)
-                # headers = {
-                #     "Authorization" = "REPLACE_WITH_AUTH_HEADER"
-                # }
-            }
-        }
-   ```
+### Reth Node CLI Arguments
+
+| Argument | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `--federation-config-path` | Path to the federation configuration file | - | Yes |
+| `--datadir` | Directory for storing node data | - | Yes |
+| `--http` | Enable the HTTP server | - | No |
+| `--http.addr` | HTTP server listening interface | 127.0.0.1 | No |
+| `--http.port` | HTTP server listening port | 8545 | No |
+| `--http.api` | API namespaces to enable on the HTTP server | eth,net,web3 | No |
+| `--http.corsdomain` | CORS domains to allow | - | No |
+| `--ws` | Enable the WebSocket server | - | No |
+| `--ws.addr` | WebSocket server listening interface | 127.0.0.1 | No |
+| `--ws.port` | WebSocket server listening port | 8546 | No |
+| `--ws.api` | API namespaces to enable on the WebSocket server | eth,net,web3 | No |
+| `--btc-signing-server-jwt-secret` | Path to JWT secret file for Bitcoin signing server authentication | - | Yes |
+| `--authrpc.addr` | Auth RPC server listening interface | 127.0.0.1 | No |
+| `--authrpc.port` | Auth RPC server listening port | 8551 | No |
+| `--btc-server` | Bitcoin signing server endpoint | - | Yes |
+| `--bitcoind.url` | URL of the Bitcoin node | - | Yes |
+| `--bitcoind.username` | Username for Bitcoin node authentication | - | Yes |
+| `--bitcoind.password` | Password for Bitcoin node authentication | - | Yes |
+| `--frost.min_signers` | Minimum number of signers required for FROST signatures | - | Yes |
+| `--frost.max_signers` | Maximum number of signers for FROST | - | Yes |
+| `--p2p-secret-key` | Path to P2P secret key file | - | Yes |
+| `--port` | P2P listening port | 30303 | No |
+| `--btc-network` | Bitcoin network (mainnet, testnet, regtest) | - | Yes |
+| `--metrics` | Metrics reporting interface:port | - | No |
+| `--federation-mode` | Run in federation consensus mode | - | Yes |
+| `--abci-port` | ABCI server listening port | 26658 | No |
+| `--abci-host` | ABCI server listening interface | 127.0.0.1 | No |
+| `--ipcdisable` | Disable IPC-RPC server | - | No |
+| `--cometbft-rpc-port` | CometBFT RPC port | 26657 | No |
+| `--cometbft-rpc-host` | CometBFT RPC host | - | Yes |
+| `--sync.enable_state_sync` | Enable state synchronization | - | No |
+| `--sync.enable_historical_sync` | Enable historical synchronization | - | No |
+| `--block-fee-recipient-address` | Address to receive block fees | - | Yes |
+| `-v[vv]` | Verbosity level (v, vv, vvv) | - | No |
+
+### Bitcoin Signing Server CLI Arguments
+
+| Argument | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `--btc-network` | Bitcoin network to use (bitcoin, testnet, regtest) | bitcoin | Yes |
+| `--identifier` | FROST identifier for the federation | - | Yes |
+| `--address` | Server listening address | 127.0.0.1:8080 | No |
+| `--db` | Path to the database directory | - | Yes |
+| `--min-signers` | Minimum number of signers required | - | Yes |
+| `--max-signers` | Maximum number of signers | - | Yes |
+| `--toml` | Path to the TOML configuration file | - | Yes |
+| `--fee-rate-diff-percentage` | Percentage difference allowed for fee rates | 30 | No |
+| `--bitcoind-url` | URL of the Bitcoin node | - | Yes |
+| `--bitcoind-user` | Username for Bitcoin node authentication | - | Yes |
+| `--bitcoind-pass` | Password for Bitcoin node authentication | - | Yes |
+| `--btc-signing-server-jwt-secret` | Path to JWT secret file | - | Yes |
+| `--fall-back-fee-rate-sat-per-vbyte` | Fallback fee rate in satoshis per virtual byte | 5 | No |
+| `--metrics-port` | Port for exposing metrics | 7000 | No |
+| `--federation-config-path` | Path to federation configuration file | - | Yes |
+| `--p2p-secret-key` | Path to P2P secret key file | - | Yes |
+| `--coordinator` | Coordinator node flag  | 0 | Yes |
+
+### CometBFT CLI Arguments
+
+| Argument | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `--home` | Directory for config and data | $HOME/.cometbft | No |
+| `--proxy_app` | ABCI application socket address | tcp://127.0.0.1:26658 | Yes |
+| `--moniker` | Node name | - | Yes |
+| `--p2p.persistent_peers` | Comma-separated list of persistent peers | - | No |
+| `--p2p.laddr` | P2P listen address | tcp://0.0.0.0:26656 | No |
+| `--rpc.laddr` | RPC listen address | tcp://127.0.0.1:26657 | No |
+| `--p2p.seed_mode` | Enable seed mode | false | No |
+| `--p2p.seeds` | Comma-separated list of seed nodes | - | No |
+| `--p2p.private_peer_ids` | Comma-separated list of private peer IDs | - | No |
+| `--consensus.create_empty_blocks` | Create empty blocks | true | No |
+| `--consensus.create_empty_blocks_interval` | Empty blocks creation interval | 0s | No |
+| `--log_level` | Log level (debug, info, error) | info | No |
+| `--log_format` | Log output format (plain, json) | plain | No |
+| `-k` | Key algorithm to use for generating node keys | secp256k1 | No |
+
+### Grafana Alloy CLI Arguments
+
+| Argument | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `run` | Run Alloy service | - | Yes |
+| `--server.http.listen-addr` | HTTP server listening address | 127.0.0.1:12345 | No |
+| `--storage.path` | Path for storing Alloy data | - | Yes |
+| `--config` | Path to config file | - | Yes |
 
 ### Allowed Ports (Recommended)
 
@@ -797,7 +820,7 @@ Set up Grafana with preconfigured dashboards:
 ## Block Fees
 
 The evm address for the block fees should be generated from the cometbft validator secret key. see[https://github.com/botanix-labs/init-keys]
-This should be stored in the reth data_dir.
+This should be passed in the `--block-fee-recipient-address` reth cli argument 
 
 ## Maintenance
 
@@ -837,14 +860,14 @@ This should be stored in the reth data_dir.
 
    | Component      | Current Version | Compatible Versions | Notes                          |
    |----------------|-----------------|---------------------|--------------------------------|
-   | Reth           | v1.0.7-main     | ≥v1.0.x             | Minor versions are compatible  |
-   | Bitcoin Signer | v1.0.7-main     | ≥v1.0.x             | Must match Reth version        |
-   | CometBFT       | v1.0.0          | ≥v1.0.x             | Not compatible with v0.37+     |
+   | Reth           | v1.0.10    | ≥v1.0.x             | Minor versions are compatible  |
+   | Bitcoin Signer | v1.0.10    | ≥v1.0.x             | Must match Reth version        |
+   | CometBFT       | v1.0.1          | ≥v1.0.x             | Not compatible with v0.37+     |
 
 4. **Recommended Upgrade Path**
 
 ```bash
-v1.0.0 → v1.0.3 → v1.0.7  # Do not skip multiple major versions
+v1.0.0 → v1.0.3 → v1.0.7 → v1.0.10  # Do not skip multiple major versions
 ```
 
 #### Upgrade Execution
@@ -861,8 +884,8 @@ v1.0.0 → v1.0.3 → v1.0.7  # Do not skip multiple major versions
 
    ```bash
    # Download new binaries
-   wget https://storage.googleapis.com/botanix-artifact-registry/releases/reth/v.1.0.7-main/reth-x86_64-unknown-linux-gnu.tar.gz
-   wget https://storage.googleapis.com/botanix-artifact-registry/releases/btc-server/v.1.0.7-main/btc-server-x86_64-unknown-linux-gnu.tar.gz
+   wget https://storage.googleapis.com/botanix-artifact-registry/releases/reth/v.1.0.10/reth-x86_64-unknown-linux-gnu.tar.gz
+   wget https://storage.googleapis.com/botanix-artifact-registry/releases/btc-server/v.1.0.10/btc-server-x86_64-unknown-linux-gnu.tar.gz
    
    # Verify checksums
    sha256sum -c reth-x86_64-unknown-linux-gnu.tar.gz.sha256sum
