@@ -756,7 +756,7 @@ This section documents all available command-line arguments for each service, pr
 | `--metrics-port` | Port for exposing metrics | 7000 | No |
 | `--federation-config-path` | Path to federation configuration file | - | Yes |
 | `--p2p-secret-key` | Path to P2P secret key file | - | Yes |
-| `--coordinator` | Coordinator node flag (0 or 1) | 0 | No |
+| `--coordinator` | Coordinator node flag  | 0 | Yes |
 
 ### CometBFT CLI Arguments
 
