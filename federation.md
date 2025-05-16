@@ -817,10 +817,12 @@ This section documents all available command-line arguments for each service, pr
 
 > **Note:** Public metrics endpoints should ideally be protected by authentication or restricted to specific IPs.
 
-## Block Fees
+## Block Fee Configuration
 
-The evm address for the block fees should be generated from the cometbft validator secret key. see[https://github.com/botanix-labs/init-keys]
-This should be passed in the `--block-fee-recipient-address` reth cli argument 
+To receive block fees, configure your Reth node with your EVM address using the following guidelines:
+1. Use any EVM address you control as your block fee recipient address
+2. Ensure proper key management for this address to maintain security of your funds
+3. Pass your address to Reth using the CLI argument: `--block-fee-recipient-address 0xYourAddressHere`
 
 ## Maintenance
 
