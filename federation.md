@@ -794,7 +794,7 @@ This section documents all available command-line arguments for each service, pr
 |--------|----------|-------------------|-----------------|----------|----------------------------------------------------------|
 | 30303  | TCP/UDP  | P2P communication | Public          | Yes      | To enable connectivity to peers                           |
 | 8545   | TCP      | JSON-RPC API      | Internal        | Yes      | Recommend to use internally within organization           |
-| 9001   | TCP      | Metrics Port      | Public          | Optional | Allow for obtaining metrics for public dashboard          |
+| 9001   | TCP      | Metrics Port      | Internal          | Optional | Allow for obtaining metrics for public dashboard          |
 | 26658  | TCP      | ABCI client port  | Internal        | Yes      | Internal to microservices                                 |
 | 30304  | TCP/UDP  | P2P communication | Public          | No       | Backup/alternate P2P port (unused)                        |
 | 8546   | TCP      | WebSocket Port    | Internal        | Optional | WebSocket connections for subscriptions                   |
@@ -805,7 +805,7 @@ This section documents all available command-line arguments for each service, pr
 | Port   | Protocol | Functionality        | Exposure     | Required | Additional Info                                 |
 |--------|----------|----------------------|--------------|----------|------------------------------------------------|
 | 8080   | TCP      | Signing Service API  | Internal     | Yes      | Must be accessible from Reth node               |
-| 7000   | TCP      | Metrics Port         | Public       | Optional | Expose metrics for monitoring dashboard         |
+| 7000   | TCP      | Metrics Port         | Internal       | Optional | Expose metrics for monitoring dashboard         |
   
 #### CometBFT Consensus Node Ports
 
@@ -813,14 +813,14 @@ This section documents all available command-line arguments for each service, pr
 |--------|----------|-------------------|--------------|----------|------------------------------------------------|
 | 26656  | TCP      | P2P communication | Public       | Yes      | Required for validator communication            |
 | 26657  | TCP      | RPC API           | Internal     | Yes      | RPC interface for queries/transactions          |
-| 26660  | TCP      | Metrics Port      | Public       | Optional | Expose metrics for monitoring dashboard         |
+| 26660  | TCP      | Metrics Port      | Internal       | Optional | Expose metrics for monitoring dashboard         |
 
 > **Note:** Public metrics endpoints should ideally be protected by authentication or restricted to specific IPs.
 
 ## Block Fees
 
 The evm address for the block fees should be generated from the cometbft validator secret key. see[https://github.com/botanix-labs/init-keys]
-This should be passed in the `--block-fee-recipient-address` reth cli argument 
+This should be passed in the `--block-fee-recipient-address` reth cli argument
 
 ## Maintenance
 
