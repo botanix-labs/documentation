@@ -230,7 +230,7 @@ services:
     command: >
       node
       --home=/cometbft
-      --proxy_app="reth-poa-node:26658"
+      --proxy_app="reth-rpc-node:26658"
       --moniker="INPUT_YOUR_MONIKER_HERE"
       --key-type=secp256k1
       --p2p.persistent_peers=${PERSISTENT_PEERS_LIST:-}
