@@ -176,7 +176,7 @@ services:
     env_file:
       - .env
     container_name: reth-rpc-node
-    image: us-central1-docker.pkg.dev/botanix-391913/botanix-mainnet-node/botanix-reth
+    image: ghcr.io/botanix-labs/botanix-reth-node:1.1.13
     command:
       - poa
       - --federation-config-path=/reth/botanix_mainnet/config/chain.toml
@@ -501,7 +501,7 @@ This section documents all available command-line arguments for each service, pr
 
    | Component      | Current Version | Compatible Versions | Notes                          |
    |----------------|-----------------|---------------------|--------------------------------|
-   | Reth           | v1.1.2         | v1.x.x             | Minor versions are compatible  |
+   | Reth           | v1.1.13         | v1.x.x             | Minor versions are compatible  |
    | CometBFT       | v1.0.1          | v1.x.x             | Not compatible with v0.37+     |
 
 
