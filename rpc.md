@@ -200,8 +200,7 @@ services:
       - --abci-host=0.0.0.0
       - --cometbft-rpc-port=26657
       - --cometbft-rpc-host=cometbft-consensus-node
-      - --sync.enable_state_sync
-      - --sync.enable_historical_sync
+
     ports:
       - 8545:8545
       - 8546:8546
